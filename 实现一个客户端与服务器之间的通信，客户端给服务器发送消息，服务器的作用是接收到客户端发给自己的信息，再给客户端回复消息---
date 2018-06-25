@@ -1,0 +1,130 @@
+服务器端
+#include<stdio.h>
+#include<unistd.h>
+#include<stdlib.h>
+#include<string.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+typedef struct sockaddr sockaddr;
+typedef struct sockaddr_in sockaddr_in;
+
+#define ERR_EXIT(m)\
+    do\
+{\
+    perror(m);\
+    exit(EXIT_FAILURE);\
+}while(0)
+
+void Usage(){
+    printf("Usage ./server [ip] [port]\n");
+    return;
+}
+int main(int argc,char*argv[]){
+    if(3!=argc){
+        Usage();
+        return 1;
+    }
+    sockaddr_in local;
+    local.sin_family=AF_INET;
+    local.sin_addr.s_addr=inet_addr(argv[1]);
+    local.sin_port=htons(atoi(argv[2]));
+    //1.创建套接字
+    int sockfd= socket(AF_INET,SOCK_DGRAM,0);
+    if(sockfd<0)
+        ERR_EXIT("socket");
+    //2.进行绑定
+    int ret= bind(sockfd,(sockaddr*)&local,sizeof(local));
+    if(ret<0)
+        ERR_EXIT("bind"); 
+    //3.循环的进行客户端与服务器之间的通信
+    char buf[1024]={0};
+    sockaddr_in client;
+    while(1){
+        socklen_t len=sizeof(client);
+        //接收客户端发送的数据，并把发送的数据输出到屏幕
+        ssize_t s=recvfrom(sockfd,buf,sizeof(buf)-1,0,\
+                (sockaddr*)&client,&len);
+        if(s>0) {
+            buf[s]=0;
+            printf("client [%s: %d] say:> %s\n",inet_ntoa(client.sin_addr),\
+                    ntohs(client.sin_port),buf);
+            //给客户端发送消息
+            memset(buf,0,sizeof(buf));
+            printf("please enter:>  ");
+            fflush(stdout);
+            ssize_t read_size = read(0,buf,sizeof(buf)-1);
+            printf("please wait......\n");
+            if(read_size>0){
+                buf[read_size-1]=0;
+                sendto(sockfd,buf,strlen(buf),0,\
+                        (sockaddr*)&client,sizeof(client));
+            }
+        }
+    }
+    return 0;
+}
+
+
+
+客户端
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<arpa/inet.h>
+#include<netinet/in.h>
+typedef struct sockaddr sockaddr;
+typedef struct sockaddr_in sockaddr_in;
+
+#define ERR_EXIT(m)\
+    do\
+{\
+    perror(m);\
+    exit(EXIT_FAILURE);\
+}while(0)
+
+void Usage(){
+    printf("Usage ./client [ip] [port]\n");
+    return;
+}
+int main(int argc,char* argv[]){
+    if(3!=argc){
+        Usage();
+        return 1;
+    }
+    sockaddr_in server;
+    server.sin_family=AF_INET;
+    server.sin_addr.s_addr=inet_addr(argv[1]);
+    server.sin_port=htons(atoi(argv[2]));
+    //1.创建套接字
+    int sockfd=socket(AF_INET,SOCK_DGRAM,0);
+    if(sockfd<0)
+        ERR_EXIT("socket");
+    //2.从键盘循环的读取数据
+    char buf[1024]={0};
+    while(1){
+        socklen_t len=sizeof(server);
+        printf("please enter:>   ");
+        fflush(stdout);
+        ssize_t read_size= read(0,buf,sizeof(buf)-1);
+        //3.把读到的数据发送给服务器
+        if(read_size>0){
+            buf[read_size-1] = 0;//read是读到换行结束的，故会多读一个字符
+            sendto(sockfd,buf,strlen(buf),0,\
+                    (sockaddr*)&server,sizeof(server));
+            printf("please wait......\n");
+            ssize_t s=recvfrom(sockfd,buf,sizeof(buf)-1,0,\
+                    (sockaddr*)&server,&len);
+            //4.把服务器发送的数据显示到屏幕上
+            if(s>0){
+                buf[s]=0;
+                printf("serevr say:>  %s\n",buf);
+            }
+        }
+    }
+    return 0;
+}
